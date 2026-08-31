@@ -13,6 +13,8 @@ const {
   DONATIONALERTS_DONATIONS_PATH = '/alerts/donations'
 } = process.env;
 
+const DEFAULT_DONATION_PAGE_URL = 'https://www.donationalerts.com/r/litasoft';
+
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
 }
@@ -54,7 +56,7 @@ app.post('/api/access/start', async (req, res) => {
     clientId,
     code,
     amountRub: Number(ACCESS_PRICE_RUB),
-    donationPageUrl: DONATION_PAGE_URL || '',
+    donationPageUrl: normalizeDonationPageUrl(DONATION_PAGE_URL),
     instruction: `Оплатите ${ACCESS_PRICE_RUB} RUB и укажите код ${code} в сообщении доната.`
   });
 });
@@ -215,4 +217,10 @@ function extractPaymentCode(text) {
 function normalizeClientId(value) {
   const text = String(value || '').trim();
   return /^[a-zA-Z0-9_-]{8,80}$/.test(text) ? text : '';
+}
+
+function normalizeDonationPageUrl(value) {
+  const text = String(value || '').trim();
+  if (!text || text === 'https://www.donationalerts.com/') return DEFAULT_DONATION_PAGE_URL;
+  return text;
 }
