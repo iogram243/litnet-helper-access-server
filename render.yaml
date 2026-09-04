@@ -10,7 +10,7 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: ACCESS_PRICE_RUB
-        value: 50
+        value: 100
       - key: ACCESS_DAYS
         value: 7
       - key: DATABASE_URL
