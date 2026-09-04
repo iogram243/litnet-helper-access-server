@@ -8,12 +8,13 @@ const {
   DONATIONALERTS_ACCESS_TOKEN,
   DONATION_PAGE_URL,
   CRON_SECRET,
-  ACCESS_PRICE_RUB = '50',
+  ACCESS_PRICE_RUB = '100',
   ACCESS_DAYS = '7',
   DONATIONALERTS_DONATIONS_PATH = '/alerts/donations'
 } = process.env;
 
 const DEFAULT_DONATION_PAGE_URL = 'https://www.donationalerts.com/r/litauthorsoft';
+const DEFAULT_ACCESS_PRICE_RUB = 100;
 
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
@@ -49,15 +50,15 @@ app.post('/api/access/start', async (req, res) => {
     `insert into payment_codes (code, client_id, amount_rub, expires_at)
      values ($1, $2, $3, now() + interval '30 minutes')
      on conflict (code) do nothing`,
-    [code, clientId, Number(ACCESS_PRICE_RUB)]
+    [code, clientId, getAccessPriceRub()]
   );
 
   res.json({
     clientId,
     code,
-    amountRub: Number(ACCESS_PRICE_RUB),
+    amountRub: getAccessPriceRub(),
     donationPageUrl: normalizeDonationPageUrl(DONATION_PAGE_URL),
-    instruction: `Оплатите ${ACCESS_PRICE_RUB} RUB и укажите код ${code} в сообщении доната.`
+    instruction: `Оплатите ${getAccessPriceRub()} RUB и укажите код ${code} в сообщении доната.`
   });
 });
 
@@ -168,7 +169,7 @@ async function applyDonations(donations) {
       [donationId, code, amount, currency]
     );
 
-    if (!code || currency !== 'RUB' || amount < Number(ACCESS_PRICE_RUB)) continue;
+    if (!code || currency !== 'RUB' || amount < getAccessPriceRub()) continue;
 
     const pending = await one(
       `select code, client_id from payment_codes
@@ -223,4 +224,9 @@ function normalizeDonationPageUrl(value) {
   const text = String(value || '').trim();
   if (!text || text === 'https://www.donationalerts.com/') return DEFAULT_DONATION_PAGE_URL;
   return text;
+}
+
+function getAccessPriceRub() {
+  const price = Number(ACCESS_PRICE_RUB);
+  return Number.isFinite(price) && price > DEFAULT_ACCESS_PRICE_RUB ? price : DEFAULT_ACCESS_PRICE_RUB;
 }
