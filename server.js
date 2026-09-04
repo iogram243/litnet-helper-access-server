@@ -48,7 +48,7 @@ app.post('/api/access/start', async (req, res) => {
 
   await query(
     `insert into payment_codes (code, client_id, amount_rub, expires_at)
-     values ($1, $2, $3, now() + interval '30 minutes')
+     values ($1, $2, $3, now() + interval '10 minutes')
      on conflict (code) do nothing`,
     [code, clientId, getAccessPriceRub()]
   );
@@ -57,6 +57,7 @@ app.post('/api/access/start', async (req, res) => {
     clientId,
     code,
     amountRub: getAccessPriceRub(),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     donationPageUrl: normalizeDonationPageUrl(DONATION_PAGE_URL),
     instruction: `Оплатите ${getAccessPriceRub()} RUB и укажите код ${code} в сообщении доната.`
   });
@@ -65,6 +66,15 @@ app.post('/api/access/start', async (req, res) => {
 app.post('/api/access/check', async (req, res) => {
   const clientId = normalizeClientId(req.body?.clientId);
   if (!clientId) return res.status(400).json({ status: 'error', error: 'clientId is required' });
+
+  if (DONATIONALERTS_ACCESS_TOKEN) {
+    try {
+      const donations = await fetchDonations();
+      await applyDonations(donations);
+    } catch (error) {
+      console.error('DonationAlerts sync during access check failed:', error.message);
+    }
+  }
 
   const row = await one(
     `select access_until from access_grants
