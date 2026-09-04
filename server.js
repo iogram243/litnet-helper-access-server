@@ -104,6 +104,29 @@ app.post('/api/donationalerts/sync', async (req, res) => {
   res.json(result);
 });
 
+app.post('/api/debug/payment', async (req, res) => {
+  if (!CRON_SECRET || req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
+    return res.sendStatus(401);
+  }
+
+  const code = extractPaymentCode(req.body?.code || '');
+  if (!code) return res.status(400).json({ error: 'Valid payment code is required' });
+
+  const payment = await one(
+    `select code, client_id, amount_rub, expires_at, used_at from payment_codes where code = $1`,
+    [code]
+  );
+  const donation = await one(
+    `select donation_id, code, amount, currency, created_at from processed_donations where code = $1 order by created_at desc limit 1`,
+    [code]
+  );
+  const grant = payment
+    ? await one(`select client_id, access_until from access_grants where client_id = $1`, [payment.client_id])
+    : null;
+
+  res.json({ payment, donation, grant });
+});
+
 app.listen(Number(PORT), () => {
   console.log(`Litnet Helper access server listening on ${PORT}`);
 });
@@ -164,18 +187,25 @@ async function applyDonations(donations) {
     const donationId = String(donation.id ?? donation.alert_id ?? '');
     if (!donationId) continue;
 
-    const exists = await one('select donation_id from processed_donations where donation_id = $1', [donationId]);
-    if (exists) continue;
-
     const amount = Number(donation.amount ?? donation.amount_main ?? 0);
     const currency = String(donation.currency ?? donation.currency_code ?? 'RUB').toUpperCase();
-    const message = String(donation.message ?? donation.username ?? donation.name ?? '');
+    const message = [
+      donation.message,
+      donation.message_text,
+      donation.comment,
+      donation.text,
+      donation.username,
+      donation.name
+    ].filter(Boolean).join(' ');
     const code = extractPaymentCode(message);
 
     await query(
       `insert into processed_donations (donation_id, code, amount, currency)
        values ($1, $2, $3, $4)
-       on conflict (donation_id) do nothing`,
+       on conflict (donation_id) do update
+       set code = coalesce(excluded.code, processed_donations.code),
+           amount = excluded.amount,
+           currency = excluded.currency`,
       [donationId, code, amount, currency]
     );
 
@@ -183,7 +213,7 @@ async function applyDonations(donations) {
 
     const pending = await one(
       `select code, client_id from payment_codes
-       where code = $1 and used_at is null and expires_at > now()`,
+       where code = $1 and used_at is null and expires_at > now() - interval '24 hours'`,
       [code]
     );
     if (!pending) continue;
