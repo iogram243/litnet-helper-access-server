@@ -13,7 +13,7 @@ const {
   DONATIONALERTS_DONATIONS_PATH = '/alerts/donations'
 } = process.env;
 
-const DEFAULT_DONATION_PAGE_URL = 'https://www.donationalerts.com/r/litasoft';
+const DEFAULT_DONATION_PAGE_URL = 'https://www.donationalerts.com/r/litauthorsoft';
 
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
